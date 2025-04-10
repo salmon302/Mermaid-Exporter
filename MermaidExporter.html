@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mermaid Diagram Exporter</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.0/dist/mermaid.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #333;
+        }
+        textarea {
+            width: 100%;
+            height: 300px;
+            padding: 10px;
+            margin-bottom: 15px;
+            font-family: monospace;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #output {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+            overflow: auto;
+        }
+        #diagramDisplay {
+            background-color: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .tab {
+            overflow: hidden;
+            border: 1px solid #ccc;
+            background-color: #f1f1f1;
+            border-radius: 4px 4px 0 0;
+        }
+        .tab button {
+            background-color: inherit;
+            float: left;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 10px 16px;
+            transition: 0.3s;
+            color: #333;
+            margin: 0;
+        }
+        .tab button:hover {
+            background-color: #ddd;
+        }
+        .tab button.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .tabcontent {
+            display: none;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            background-color: white;
+        }
+        .options-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .option-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        select, input[type="text"], input[type="number"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .button-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        #titleContainer {
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Mermaid Diagram Exporter</h1>
+        
+        <div class="tab">
+            <button class="tablinks active" onclick="openTab(event, 'Editor')">Diagram Editor</button>
+            <button class="tablinks" onclick="openTab(event, 'FileLoader')">Load From File</button>
+            <button class="tablinks" onclick="openTab(event, 'Presets')">Package Delivery Diagrams</button>
+            <button class="tablinks" onclick="openTab(event, 'HospitalPresets')">Hospital Diagrams</button>
+            <button class="tablinks" onclick="openTab(event, 'NormalizationPresets')">Normalization Diagrams</button>
+        </div>
+        
+        <div id="Editor" class="tabcontent" style="display:block;">
+            <h2>Create Diagram</h2>
+            <div class="options-container">
+                <div class="option-group">
+                    <label for="themeSelector">Theme:</label>
+                    <select id="themeSelector" onchange="updateTheme()">
+                        <option value="default">Default</option>
+                        <option value="dark">Dark</option>
+                        <option value="forest">Forest</option>
+                        <option value="neutral">Neutral</option>
+                    </select>
+                </div>
+                <div class="option-group">
+                    <label for="diagramTitle">Diagram Title:</label>
+                    <input type="text" id="diagramTitle" placeholder="Enter diagram title (optional)">
+                </div>
+            </div>
+            <textarea id="code" placeholder="Enter your Mermaid diagram code here...">erDiagram
+    CUSTOMER ||--o{ SHIPMENT : "ships"
+    SHIPMENT ||--o{ PACKAGE : "contains"
+    PACKAGE }|--|| LOCATION : "is at"</textarea>
+            <div class="button-container">
+                <button onclick="renderDiagram()">Render Diagram</button>
+                <button onclick="exportToPNG()">Export as PNG</button>
+                <button onclick="exportToSVG()">Export as SVG</button>
+                <button onclick="copyToClipboard()">Copy to Clipboard</button>
+            </div>
+        </div>
+        
+        <div id="FileLoader" class="tabcontent">
+            <h2>Load Diagrams from Markdown</h2>
+            <p>Select a markdown file to extract and render Mermaid diagrams:</p>
+            <input type="file" id="fileInput" accept=".md">
+            <button onclick="loadDiagramsFromFile()">Load Diagrams</button>
+            <div id="diagramsList"></div>
+        </div>
+
+        <div id="Presets" class="tabcontent">
+            <h2>Package Delivery Diagrams</h2>
+            <h3>Entity-Relationship Diagram</h3>
+            <button onclick="loadPresetDiagram('er')">Load ER Diagram</button>
+            <h3>Database Schema</h3>
+            <button onclick="loadPresetDiagram('schema')">Load Schema Diagram</button>
+            <h3>Package Tracking Flow</h3>
+            <button onclick="loadPresetDiagram('flow')">Load Flow Diagram</button>
+        </div>
+        
+        <div id="HospitalPresets" class="tabcontent">
+            <h2>Hospital Database Diagrams</h2>
+            <h3>Entity-Relationship Diagram</h3>
+            <button onclick="loadPresetDiagram('hospital_er')">Load Hospital ER Diagram</button>
+            <h3>Patient-Doctor Relationship</h3>
+            <button onclick="loadPresetDiagram('hospital_relationship')">Load Relationship Diagram</button>
+            <h3>Medical Log Flow</h3>
+            <button onclick="loadPresetDiagram('hospital_flow')">Load Medical Log Flow</button>
+        </div>
+        
+        <div id="NormalizationPresets" class="tabcontent">
+            <h2>Database Normalization Diagrams</h2>
+            <h3>Original Schema</h3>
+            <button onclick="loadPresetDiagram('norm_original')">Load Original Schema</button>
+            <h3>Normalized Schema (4NF)</h3>
+            <button onclick="loadPresetDiagram('norm_4nf')">Load 4NF Schema</button>
+            <h3>Normalization Process</h3>
+            <button onclick="loadPresetDiagram('norm_process')">Load Normalization Process</button>
+        </div>
+        
+        <div id="diagramDisplay"></div>
+    </div>
+
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({ startOnLoad: false, theme: 'default' });
+        
+        // Update theme function
+        function updateTheme() {
+            const theme = document.getElementById('themeSelector').value;
+            mermaid.initialize({ startOnLoad: false, theme: theme });
+            renderDiagram();
+        }
+        
+        // Copy to clipboard function
+        function copyToClipboard() {
+            const display = document.getElementById('diagramDisplay');
+            if (!display.querySelector('svg')) {
+                alert('Please render a diagram first!');
+                return;
+            }
+            
+            // For SVG copy
+            const svgElement = display.querySelector('svg');
+            const svgString = new XMLSerializer().serializeToString(svgElement);
+            
+            navigator.clipboard.writeText(svgString).then(() => {
+                alert('SVG copied to clipboard!');
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+                alert('Failed to copy to clipboard');
+            });
+        }
+        
+        // Export to SVG function
+        function exportToSVG() {
+            const display = document.getElementById('diagramDisplay');
+            if (!display.querySelector('svg')) {
+                alert('Please render a diagram first!');
+                return;
+            }
+            
+            const svgElement = display.querySelector('svg');
+            const svgString = new XMLSerializer().serializeToString(svgElement);
+            const blob = new Blob([svgString], {type: 'image/svg+xml'});
+            saveAs(blob, 'mermaid_diagram.svg');
+        }
+        
+        // Open tab function
+        function openTab(evt, tabName) {
+            var i, tabcontent, tablinks;
+            tabcontent = document.getElementsByClassName("tabcontent");
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+            }
+            tablinks = document.getElementsByClassName("tablinks");
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+            document.getElementById(tabName).style.display = "block";
+            evt.currentTarget.className += " active";
+        }
+        
+        // Render diagram function
+        function renderDiagram() {
+            const code = document.getElementById('code').value;
+            const display = document.getElementById('diagramDisplay');
+            const title = document.getElementById('diagramTitle').value;
+            
+            // Clear previous diagram
+            display.innerHTML = '';
+            
+            // Add title if provided
+            if (title) {
+                const titleElement = document.createElement('div');
+                titleElement.id = 'titleContainer';
+                titleElement.textContent = title;
+                display.appendChild(titleElement);
+            }
+            
+            // Create new diagram container
+            const diagramContainer = document.createElement('div');
+            diagramContainer.className = 'mermaid';
+            diagramContainer.textContent = code;
+            display.appendChild(diagramContainer);
+            
+            // Render the diagram
+            mermaid.render('mermaid-svg', code).then(result => {
+                // Replace just the diagram container, not the title
+                diagramContainer.outerHTML = result.svg;
+            }).catch(error => {
+                diagramContainer.outerHTML = '<p style="color: red;">Error rendering diagram: ' + error.message + '</p>';
+            });
+        }
+        
+        // Export to PNG function
+        function exportToPNG() {
+            const display = document.getElementById('diagramDisplay');
+            if (!display.querySelector('svg')) {
+                alert('Please render a diagram first!');
+                return;
+            }
+            
+            // Set optional scale and background color
+            const scale = 2; // Higher quality export
+            html2canvas(display, {
+                backgroundColor: '#FFFFFF',
+                scale: scale
+            }).then(canvas => {
+                canvas.toBlob(function(blob) {
+                    const fileName = document.getElementById('diagramTitle').value ? 
+                        document.getElementById('diagramTitle').value.replace(/\s+/g, '_') + '.png' : 
+                        'mermaid_diagram.png';
+                    saveAs(blob, fileName);
+                });
+            });
+        }
+        
+        // Extract Mermaid diagrams from a markdown file
+        function loadDiagramsFromFile() {
+            const fileInput = document.getElementById('fileInput');
+            const diagramsList = document.getElementById('diagramsList');
+            
+            if (!fileInput.files.length) {
+                alert('Please select a file first!');
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                const content = e.target.result;
+                const diagrams = extractMermaidDiagrams(content);
+                
+                diagramsList.innerHTML = '';
+                
+                if (diagrams.length === 0) {
+                    diagramsList.innerHTML = '<p>No Mermaid diagrams found in this file.</p>';
+                    return;
+                }
+                
+                diagrams.forEach((diagram, index) => {
+                    const container = document.createElement('div');
+                    container.className = 'diagram-container';
+                    
+                    const header = document.createElement('h3');
+                    header.textContent = `Diagram ${index + 1}`;
+                    
+                    const loadButton = document.createElement('button');
+                    loadButton.textContent = 'Load This Diagram';
+                    loadButton.onclick = function() {
+                        document.getElementById('code').value = diagram;
+                        renderDiagram();
+                        document.querySelector('.tablinks.active').classList.remove('active');
+                        document.querySelectorAll('.tablinks')[0].classList.add('active');
+                        document.querySelectorAll('.tabcontent').forEach(tab => tab.style.display = 'none');
+                        document.getElementById('Editor').style.display = 'block';
+                    };
+                    
+                    const preview = document.createElement('pre');
+                    preview.textContent = diagram.substring(0, 100) + (diagram.length > 100 ? '...' : '');
+                    
+                    container.appendChild(header);
+                    container.appendChild(loadButton);
+                    container.appendChild(preview);
+                    
+                    diagramsList.appendChild(container);
+                });
+            };
+            
+            reader.readAsText(file);
+        }
+        
+        // Extract Mermaid diagrams from text
+        function extractMermaidDiagrams(text) {
+            const diagrams = [];
+            const regex = /```mermaid\s+([\s\S]*?)\s+```/g;
+            let match;
+            
+            while ((match = regex.exec(text)) !== null) {
+                diagrams.push(match[1].trim());
+            }
+            
+            return diagrams;
+        }
+        
+        // Load preset diagrams
+        function loadPresetDiagram(type) {
+            let diagramCode = '';
+            
+            if (type === 'er') {
+                diagramCode = `erDiagram
+    CUSTOMER ||--o{ SHIPMENT : "ships as sender"
+    CUSTOMER ||--o{ SHIPMENT : "receives as receiver"
+    
+    SHIPMENT ||--o{ PACKAGE : "contains"
+    
+    PACKAGE }|--|| LOCATION : "currently at"
+    PACKAGE ||--o{ LOCATION_HISTORY : "has"
+    
+    LOCATION ||--o{ LOCATION_HISTORY : "appears in"
+    
+    EMPLOYEE }o--|| LOCATION : "assigned to"
+    EMPLOYEE ||--o{ LOCATION_HISTORY : "handles"
+    
+    LOCATION ||--o{ VEHICLE : "specializes as"
+    LOCATION ||--o{ FACILITY : "specializes as"
+    
+    CUSTOMER {
+        string CustomerID PK
+        string Name
+        string Address
+        string CustomerType
+    }
+    
+    SHIPMENT {
+        string ShipmentID PK
+        string ShipperCustomerID FK
+        string ReceiverCustomerID FK
+        string OriginLocationID FK
+        string DestinationLocationID FK
+        date ShipmentDate
+        string Status
+    }
+    
+    PACKAGE {
+        string PackageID PK
+        string ShipmentID FK
+        float Weight
+        string Dimensions
+        string CurrentLocationID FK
+        date ShipDate
+        string Status
+    }
+    
+    LOCATION {
+        string LocationID PK
+        string LocationType
+        string LocationName
+    }`;
+            } else if (type === 'schema') {
+                diagramCode = `classDiagram
+    class Customer {
+        +CustomerID: string PK
+        +Name: string
+        +Address: string
+        +City: string
+        +State: string
+        +Country: string
+        +PostalCode: string
+        +Phone: string
+        +Email: string
+        +CustomerType: string
+    }
+    
+    class Shipment {
+        +ShipmentID: string PK
+        +ShipperCustomerID: string FK
+        +ReceiverCustomerID: string FK
+        +OriginLocationID: string FK
+        +DestinationLocationID: string FK
+        +ShipmentDate: date
+        +Status: string
+    }
+    
+    class Package {
+        +PackageID: string PK
+        +ShipmentID: string FK
+        +Weight: float
+        +Dimensions: string
+        +Description: string
+        +CurrentLocationID: string FK
+        +ShipDate: date
+        +Status: string
+    }
+    
+    class Location {
+        +LocationID: string PK
+        +LocationType: string
+        +LocationName: string
+    }
+    
+    Customer "1" --> "many" Shipment: ships
+    Customer "1" --> "many" Shipment: receives
+    Shipment "1" --> "many" Package: contains
+    Package "many" --> "1" Location: currently at`;
+            } else if (type === 'flow') {
+                diagramCode = `flowchart TD
+    A[Customer creates shipment] --> B{Package processed}
+    B --> C[Package picked up]
+    C --> D[Package in transit]
+    D --> E{Package at sorting facility}
+    E --> F[Package in local delivery]
+    F --> G[Package delivered]
+    
+    E -- Rerouting needed --> D
+    
+    subgraph "Location History Tracking"
+    H[Create history entry] --> I[Update package location]
+    I --> J[Employee handles package]
+    J --> K[Record arrival/departure times]
+    end
+    
+    B -.-> H
+    C -.-> H
+    D -.-> H
+    E -.-> H
+    F -.-> H
+    G -.-> H`;
+            } 
+            // Hospital diagrams
+            else if (type === 'hospital_er') {
+                diagramCode = `erDiagram
+    PATIENT ||--o{ MEDICAL_LOG : "has"
+    DOCTOR ||--o{ MEDICAL_LOG : "administers"
+    TEST }|--o{ MEDICAL_LOG : "referenced in"
+    EXAMINATION }|--o{ MEDICAL_LOG : "referenced in"
+    
+    PATIENT {
+        string PatientID PK
+        string Name
+        date DOB
+        string Gender
+        string Address
+        string Phone
+        string Email
+    }
+    
+    DOCTOR {
+        string DoctorID PK
+        string Name
+        string Specialization
+        string ContactInfo
+    }
+    
+    TEST {
+        string TestID PK
+        string TestName
+        string TestType
+        string Description
+    }
+    
+    EXAMINATION {
+        string ExaminationID PK
+        string ExamName
+        string Description
+    }
+    
+    MEDICAL_LOG {
+        string LogID PK
+        string PatientID FK
+        string DoctorID FK
+        string TestID FK
+        string ExaminationID FK
+        date Date
+        string Results
+        string Notes
+    }`;
+            } else if (type === 'hospital_relationship') {
+                diagramCode = `classDiagram
+    class Patient {
+        +PatientID: string PK
+        +Name: string
+        +DOB: date
+        +Gender: string
+        +Address: string
+        +Phone: string
+        +Email: string
+    }
+    
+    class Doctor {
+        +DoctorID: string PK
+        +Name: string
+        +Specialization: string
+        +ContactInfo: string
+    }
+    
+    class Test {
+        +TestID: string PK
+        +TestName: string
+        +TestType: string
+        +Description: string
+    }
+    
+    class Examination {
+        +ExaminationID: string PK
+        +ExamName: string
+        +Description: string
+    }
+    
+    class MedicalLog {
+        +LogID: string PK
+        +PatientID: string FK
+        +DoctorID: string FK
+        +TestID: string FK
+        +ExaminationID: string FK
+        +Date: date
+        +Results: string
+        +Notes: string
+    }
+    
+    Patient "1" <-- "many" MedicalLog: has
+    Doctor "1" <-- "many" MedicalLog: administers
+    Test "1" <-- "many" MedicalLog: references
+    Examination "1" <-- "many" MedicalLog: references`;
+            } else if (type === 'hospital_flow') {
+                diagramCode = `flowchart TD
+    A[Patient Registration] --> B[Doctor Appointment]
+    B --> C{Examination needed?}
+    C -->|Yes| D[Conduct Examination]
+    C -->|No| E[Prescribe Treatment]
+    D --> F{Tests needed?}
+    E --> F
+    F -->|Yes| G[Order Tests]
+    F -->|No| H[Treatment Plan]
+    G --> I[Record Test Results]
+    I --> H
+    H --> J[Follow-up Required?]
+    J -->|Yes| B
+    J -->|No| K[Discharge Patient]
+    
+    subgraph "Medical Log Process"
+    L[Create Log Entry] --> M[Associate with Patient]
+    M --> N[Associate with Doctor]
+    N --> O[Link Tests/Examinations]
+    O --> P[Record Results & Notes]
+    end
+    
+    B -.-> L
+    D -.-> L
+    G -.-> L
+    I -.-> L`;
+            }
+            // Normalization diagrams
+            else if (type === 'norm_original') {
+                diagramCode = `erDiagram
+    BOOKS {
+        string accessionno PK
+        string isbn
+        string title
+        string author
+        string publisher
+    }
+    
+    USERS {
+        string userid PK
+        string name
+        string deptid
+        string deptname
+    }
+    
+    %% Functional Dependencies:
+    %% accessionno → isbn
+    %% isbn → title
+    %% isbn → publisher
+    %% isbn →→ author (Multivalued)
+    %% userid → name
+    %% userid → deptid
+    %% deptid → deptname`;
+            } else if (type === 'norm_4nf') {
+                diagramCode = `erDiagram
+    BOOKS_ACCESSION ||--|{ BOOKS_INFO : references
+    BOOKS_INFO ||--|{ BOOKS_AUTHOR : has
+    USERS }|--|| DEPARTMENTS : belongs_to
+    
+    BOOKS_ACCESSION {
+        string accessionno PK
+        string isbn FK
+    }
+    
+    BOOKS_INFO {
+        string isbn PK
+        string title
+        string publisher
+    }
+    
+    BOOKS_AUTHOR {
+        string isbn PK,FK
+        string author PK
+    }
+    
+    USERS {
+        string userid PK
+        string name
+        string deptid FK
+    }
+    
+    DEPARTMENTS {
+        string deptid PK
+        string deptname
+    }`;
+            } else if (type === 'norm_process') {
+                diagramCode = `flowchart TD
+    A[Original Schema] --> B[First Normal Form (1NF)]
+    B --> C[Second Normal Form (2NF)]
+    C --> D[Third Normal Form (3NF)]
+    D --> E[BCNF]
+    E --> F[Fourth Normal Form (4NF)]
+    
+    subgraph "Original Schema"
+    A1[books(accessionno, isbn, title, author, publisher)]
+    A2[users(userid, name, deptid, deptname)]
+    end
+    
+    subgraph "4NF Schema"
+    F1[books_accession(accessionno, isbn)]
+    F2[books_info(isbn, title, publisher)]
+    F3[books_author(isbn, author)]
+    F4[users(userid, name, deptid)]
+    F5[departments(deptid, deptname)]
+    end
+    
+    A ---> A1
+    A ---> A2
+    F ---> F1
+    F ---> F2
+    F ---> F3
+    F ---> F4
+    F ---> F5`;
+            }
+            
+            document.getElementById('code').value = diagramCode;
+            renderDiagram();
+            
+            document.querySelector('.tablinks.active').classList.remove('active');
+            document.querySelectorAll('.tablinks')[0].classList.add('active');
+            document.querySelectorAll('.tabcontent').forEach(tab => tab.style.display = 'none');
+            document.getElementById('Editor').style.display = 'block';
+        }
+        
+        // Initial render
+        renderDiagram();
+    </script>
+</body>
+</html>
