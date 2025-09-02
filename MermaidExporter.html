@@ -7,6 +7,9 @@
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.0/dist/mermaid.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <!-- Optional alternative layout engine: Graphviz via d3-graphviz -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.2/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-graphviz/3.0.5/d3-graphviz.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -45,6 +48,51 @@
         }
         button:hover {
             background-color: #45a049;
+        }
+        button:disabled,
+        button[disabled] {
+            background-color: #d4d4d4;
+            color: #888;
+            cursor: not-allowed;
+            box-shadow: none;
+            opacity: 0.9;
+        }
+
+        /* Status bar and spinner */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-top: 12px;
+            font-size: 0.95rem;
+        }
+        .status-bar.hidden { display: none; }
+        .status-bar.info { background: #eef8ff; border: 1px solid #c7e0ff; color: #0366d6; }
+        .status-bar.success { background: #efffec; border: 1px solid #c7efcc; color: #116622; }
+        .status-bar.error { background: #fff3f2; border: 1px solid #f5c6c6; color: #b22; }
+
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border: 3px solid rgba(0,0,0,0.12);
+            border-top-color: rgba(0,0,0,0.6);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            flex: 0 0 18px;
+        }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        .error-box {
+            margin-top: 12px;
+            padding: 10px 12px;
+            border-radius: 6px;
+            background: #fff3f2;
+            border: 1px solid #f5c6c6;
+            color: #b22;
+            font-size: 0.95rem;
+            white-space: pre-wrap;
         }
         #output {
             margin-top: 20px;
@@ -98,6 +146,49 @@
             gap: 15px;
             margin-bottom: 15px;
         }
+        .card {
+            background: #ffffff;
+            border: 1px solid #ececec;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+        }
+        .preview-toolbar .toolbar-buttons button {
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 6px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .preview-toolbar .toolbar-buttons button:hover { background: #f6f6f6; }
+
+        /* Collapsible settings */
+        .settings-collapsed .options-container { display: none; }
+        .settings-toggle {
+            display:inline-flex; align-items:center; gap:8px; cursor:pointer; font-size:0.95rem; color:#0366d6;
+            background:none; border:none; padding:0;
+        }
+
+        /* Preset tiles */
+        .preset-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:12px; margin-top:10px; }
+        .preset-tile { border:1px solid #e6e6e6; border-radius:6px; padding:8px; background:#fff; cursor:pointer; }
+        .preset-tile:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+        .preset-thumb { height:80px; overflow:hidden; background:#fafafa; border-radius:4px; padding:6px; font-family:monospace; font-size:11px; color:#444; white-space:pre-wrap; }
+        .preset-title { margin-top:8px; font-weight:600; }
+        .main-grid {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+            margin-top: 8px;
+        }
+        .editor-column { flex: 1 1 520px; min-width: 320px; }
+        .preview-column { flex: 1 1 520px; min-width: 340px; }
+        .preview-column .preview-toolbar {
+            display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;
+        }
+        @media (max-width: 900px) {
+            .main-grid { flex-direction: column; }
+        }
         .option-group {
             display: flex;
             align-items: center;
@@ -135,30 +226,83 @@
         
         <div id="Editor" class="tabcontent" style="display:block;">
             <h2>Create Diagram</h2>
-            <div class="options-container">
-                <div class="option-group">
-                    <label for="themeSelector">Theme:</label>
-                    <select id="themeSelector" onchange="updateTheme()">
-                        <option value="default">Default</option>
-                        <option value="dark">Dark</option>
-                        <option value="forest">Forest</option>
-                        <option value="neutral">Neutral</option>
-                    </select>
-                </div>
-                <div class="option-group">
-                    <label for="diagramTitle">Diagram Title:</label>
-                    <input type="text" id="diagramTitle" placeholder="Enter diagram title (optional)">
-                </div>
-            </div>
-            <textarea id="code" placeholder="Enter your Mermaid diagram code here...">erDiagram
+            <div class="main-grid">
+                <div class="editor-column">
+                    <div class="card">
+                        <div class="options-container">
+                            <div class="option-group">
+                                <label for="themeSelector">Theme:</label>
+                                <select id="themeSelector" onchange="applySettings()">
+                                    <option value="default">Default</option>
+                                    <option value="dark">Dark</option>
+                                    <option value="forest">Forest</option>
+                                    <option value="neutral">Neutral</option>
+                                </select>
+                            </div>
+                            <div class="option-group">
+                                <label for="diagramTitle">Diagram Title:</label>
+                                <input type="text" id="diagramTitle" placeholder="Enter diagram title (optional)">
+                            </div>
+                            <div class="option-group">
+                                <label for="edgeStyleSelector">Edge style:</label>
+                                <select id="edgeStyleSelector" onchange="applySettings()">
+                                    <option value="smooth">Smooth (curved)</option>
+                                    <option value="straight">Straight</option>
+                                </select>
+                            </div>
+                            <div class="option-group">
+                                <label for="rendererSelector">Renderer:</label>
+                                <select id="rendererSelector" onchange="applySettings()">
+                                    <option value="mermaid">Mermaid</option>
+                                    <option value="graphviz">Graphviz (DOT)</option>
+                                </select>
+                            </div>
+                            <div id="rendererWarning" style="color: #b04; margin-left: 8px; align-self: center; display: none;"></div>
+                            <div class="option-group">
+                                <label for="orientationSelector">Orientation:</label>
+                                <select id="orientationSelector" onchange="applySettings()">
+                                    <option value="TD">Top → Down (TD)</option>
+                                    <option value="LR">Left → Right (LR)</option>
+                                    <option value="RL">Right → Left (RL)</option>
+                                    <option value="BT">Bottom → Top (BT)</option>
+                                </select>
+                            </div>
+                            <div class="option-group">
+                                <label for="liveToggle">Live Preview:</label>
+                                <input type="checkbox" id="liveToggle" title="When enabled, edits render automatically (500ms debounce)">
+                            </div>
+                        </div>
+                        <textarea id="code" placeholder="Enter your Mermaid diagram code here...">erDiagram
     CUSTOMER ||--o{ SHIPMENT : "ships"
     SHIPMENT ||--o{ PACKAGE : "contains"
     PACKAGE }|--|| LOCATION : "is at"</textarea>
-            <div class="button-container">
-                <button onclick="renderDiagram()">Render Diagram</button>
-                <button onclick="exportToPNG()">Export as PNG</button>
-                <button onclick="exportToSVG()">Export as SVG</button>
-                <button onclick="copyToClipboard()">Copy to Clipboard</button>
+                        <div class="button-container">
+                            <button id="renderBtn" onclick="renderDiagram()">Render Diagram</button>
+                            <button id="exportPngBtn" onclick="exportToPNG()">Export as PNG</button>
+                            <button id="exportSvgBtn" onclick="exportToSVG()">Export as SVG</button>
+                            <button id="copyBtn" onclick="copyToClipboard()">Copy to Clipboard</button>
+                        </div>
+                        <div id="statusBar" class="status-bar hidden info" role="status" aria-live="polite">
+                            <div id="statusSpinner" class="spinner" style="display:none;"></div>
+                            <div id="statusMessage">Ready</div>
+                        </div>
+                        <div id="errorBox" class="error-box" style="display:none;" role="alert"></div>
+                    </div>
+                </div>
+                <div class="preview-column">
+                    <div class="card">
+                        <div class="preview-toolbar">
+                            <div style="font-weight:600">Preview</div>
+                            <div class="toolbar-buttons">
+                                <button id="zoomInBtn" title="Zoom in">＋</button>
+                                <button id="zoomOutBtn" title="Zoom out">－</button>
+                                <button id="fitBtn" title="Fit to view">Fit</button>
+                                <button id="resetViewBtn" title="Reset view">Reset</button>
+                            </div>
+                        </div>
+                        <div id="diagramDisplay"></div>
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -172,66 +316,280 @@
 
         <div id="Presets" class="tabcontent">
             <h2>Package Delivery Diagrams</h2>
-            <h3>Entity-Relationship Diagram</h3>
-            <button onclick="loadPresetDiagram('er')">Load ER Diagram</button>
-            <h3>Database Schema</h3>
-            <button onclick="loadPresetDiagram('schema')">Load Schema Diagram</button>
-            <h3>Package Tracking Flow</h3>
-            <button onclick="loadPresetDiagram('flow')">Load Flow Diagram</button>
+            <div class="preset-grid" id="presetGrid_package"></div>
         </div>
         
         <div id="HospitalPresets" class="tabcontent">
             <h2>Hospital Database Diagrams</h2>
-            <h3>Entity-Relationship Diagram</h3>
-            <button onclick="loadPresetDiagram('hospital_er')">Load Hospital ER Diagram</button>
-            <h3>Patient-Doctor Relationship</h3>
-            <button onclick="loadPresetDiagram('hospital_relationship')">Load Relationship Diagram</button>
-            <h3>Medical Log Flow</h3>
-            <button onclick="loadPresetDiagram('hospital_flow')">Load Medical Log Flow</button>
+            <div class="preset-grid" id="presetGrid_hospital"></div>
         </div>
         
         <div id="NormalizationPresets" class="tabcontent">
             <h2>Database Normalization Diagrams</h2>
-            <h3>Original Schema</h3>
-            <button onclick="loadPresetDiagram('norm_original')">Load Original Schema</button>
-            <h3>Normalized Schema (4NF)</h3>
-            <button onclick="loadPresetDiagram('norm_4nf')">Load 4NF Schema</button>
-            <h3>Normalization Process</h3>
-            <button onclick="loadPresetDiagram('norm_process')">Load Normalization Process</button>
+            <div class="preset-grid" id="presetGrid_normalization"></div>
         </div>
         
-        <div id="diagramDisplay"></div>
     </div>
 
     <script>
-        // Initialize Mermaid
-        mermaid.initialize({ startOnLoad: false, theme: 'default' });
-        
-        // Update theme function
-        function updateTheme() {
+    // Initialize Mermaid with defaults (may be overridden by applySettings)
+    mermaid.initialize({ startOnLoad: false, theme: 'default', flowchart: { curve: 'basis' } });
+
+    // Preview view state
+    let _previewScale = 1;
+    function applyPreviewTransform() {
+        const display = document.getElementById('diagramDisplay');
+        if (!display) return;
+        display.style.transformOrigin = '0 0';
+        display.style.transform = `scale(${_previewScale})`;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const zoomIn = document.getElementById('zoomInBtn');
+        const zoomOut = document.getElementById('zoomOutBtn');
+        const fitBtn = document.getElementById('fitBtn');
+        const resetBtn = document.getElementById('resetViewBtn');
+        if (zoomIn) zoomIn.onclick = () => { _previewScale = Math.min(3, _previewScale + 0.1); applyPreviewTransform(); };
+        if (zoomOut) zoomOut.onclick = () => { _previewScale = Math.max(0.25, _previewScale - 0.1); applyPreviewTransform(); };
+        if (resetBtn) resetBtn.onclick = () => { _previewScale = 1; applyPreviewTransform(); };
+        if (fitBtn) fitBtn.onclick = () => {
+            const display = document.getElementById('diagramDisplay');
+            if (!display) return;
+            // crude fit: scale to container width
+            const parentW = display.parentElement.clientWidth;
+            const svg = display.querySelector('svg');
+            if (!svg) { _previewScale = 1; applyPreviewTransform(); return; }
+            const bbox = svg.getBBox();
+            const scale = Math.max(0.25, Math.min(2.5, parentW / (bbox.width + 40)));
+            _previewScale = scale;
+            applyPreviewTransform();
+        };
+
+        buildPresetTiles();
+    });
+
+    // Preset definitions (used to populate preset grids)
+    const PRESETS = {
+        'package': [
+            { id: 'er', title: 'ER Diagram', code: `erDiagram\n    CUSTOMER ||--o{ SHIPMENT : "ships as sender"\n    CUSTOMER ||--o{ SHIPMENT : "receives as receiver"\n    SHIPMENT ||--o{ PACKAGE : "contains"` },
+            { id: 'schema', title: 'Database Schema', code: `classDiagram\n    class Customer { +CustomerID: string PK +Name: string }` },
+            { id: 'flow', title: 'Package Flow', code: `flowchart TD\n    A[Customer creates shipment] --> B[Package processed]` }
+        ],
+        'hospital': [
+            { id: 'hospital_er', title: 'Hospital ER', code: `erDiagram\n    PATIENT ||--o{ MEDICAL_LOG : "has"` },
+            { id: 'hospital_relationship', title: 'Patient-Doctor Relationship', code: `classDiagram\n    class Patient { +PatientID: string PK }` },
+            { id: 'hospital_flow', title: 'Medical Log Flow', code: `flowchart TD\n    A[Patient Registration] --> B[Doctor Appointment]` }
+        ],
+        'normalization': [
+            { id: 'norm_original', title: 'Original Schema', code: `erDiagram\n    BOOKS { string accessionno PK string isbn }` },
+            { id: 'norm_4nf', title: '4NF Schema', code: `erDiagram\n    BOOKS_ACCESSION ||--|{ BOOKS_INFO : references` },
+            { id: 'norm_process', title: 'Normalization Process', code: `flowchart TD\n    A[Original Schema] --> B[1NF] --> C[2NF]` }
+        ]
+    };
+
+    function buildPresetTiles() {
+        const mapping = [ ['package','presetGrid_package'], ['hospital','presetGrid_hospital'], ['normalization','presetGrid_normalization'] ];
+        mapping.forEach(([key, elId]) => {
+            const el = document.getElementById(elId);
+            if (!el || !PRESETS[key]) return;
+            el.innerHTML = '';
+            PRESETS[key].forEach(p => {
+                const tile = document.createElement('div');
+                tile.className = 'preset-tile';
+                tile.onclick = () => loadPresetDiagram(p.id);
+
+                const thumb = document.createElement('div');
+                thumb.className = 'preset-thumb';
+                thumb.textContent = p.code.substring(0, 300);
+
+                const title = document.createElement('div');
+                title.className = 'preset-title';
+                title.textContent = p.title;
+
+                tile.appendChild(thumb);
+                tile.appendChild(title);
+                el.appendChild(tile);
+            });
+        });
+    }
+
+    // Enable/disable export & clipboard buttons depending on rendered state
+        function updateExportButtonState(enabled) {
+            const exportPngBtn = document.getElementById('exportPngBtn');
+            const exportSvgBtn = document.getElementById('exportSvgBtn');
+            const copyBtn = document.getElementById('copyBtn');
+            if (exportPngBtn) exportPngBtn.disabled = !enabled;
+            if (exportSvgBtn) exportSvgBtn.disabled = !enabled;
+            if (copyBtn) copyBtn.disabled = !enabled;
+        }
+
+        // Status / error UI helpers
+        function showStatus(message, type = 'info', withSpinner = false) {
+            const bar = document.getElementById('statusBar');
+            const msg = document.getElementById('statusMessage');
+            const spinner = document.getElementById('statusSpinner');
+            if (!bar || !msg) return;
+            msg.textContent = message;
+            bar.classList.remove('info', 'success', 'error');
+            bar.classList.add(type);
+            if (withSpinner) spinner.style.display = '';
+            else spinner.style.display = 'none';
+            bar.classList.remove('hidden');
+        }
+
+        function hideStatus() {
+            const bar = document.getElementById('statusBar');
+            if (!bar) return;
+            bar.classList.add('hidden');
+        }
+
+        function showError(text) {
+            const box = document.getElementById('errorBox');
+            if (!box) return;
+            box.textContent = text;
+            box.style.display = '';
+            showStatus('Error', 'error', false);
+            updateExportButtonState(false);
+        }
+
+        function clearError() {
+            const box = document.getElementById('errorBox');
+            if (!box) return;
+            box.textContent = '';
+            box.style.display = 'none';
+        }
+
+        // start with exports disabled until a diagram is rendered
+        updateExportButtonState(false);
+
+        // Apply UI settings (theme, edge style, orientation) and persist to localStorage
+        function applySettings() {
             const theme = document.getElementById('themeSelector').value;
-            mermaid.initialize({ startOnLoad: false, theme: theme });
+            const edgeStyle = document.getElementById('edgeStyleSelector').value;
+            const renderer = document.getElementById('rendererSelector') ? document.getElementById('rendererSelector').value : 'mermaid';
+            const orientation = document.getElementById('orientationSelector').value;
+            const curve = (edgeStyle === 'straight') ? 'linear' : 'basis';
+
+            const settings = { theme, edgeStyle, curve, orientation, renderer };
+            try { localStorage.setItem('mermaidExporter.settings', JSON.stringify(settings)); } catch (e) { /* ignore */ }
+
+            // Configure Mermaid when used
+            mermaid.initialize({ startOnLoad: false, theme: theme, flowchart: { curve: curve } });
+
+            // Re-render to apply changes
             renderDiagram();
         }
+
+        // Lazy-load d3 and d3-graphviz only when needed
+        let _graphvizLoading = null;
+        function ensureGraphvizLoaded() {
+            if (window.d3 && window.d3.select && window.d3.graphviz) return Promise.resolve();
+            if (_graphvizLoading) return _graphvizLoading;
+
+            _graphvizLoading = new Promise((resolve, reject) => {
+                // Load d3 then d3-graphviz sequentially
+                const d3Script = document.createElement('script');
+                d3Script.src = 'https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.2/d3.min.js';
+                d3Script.onload = () => {
+                    const gvScript = document.createElement('script');
+                    gvScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/d3-graphviz/3.0.5/d3-graphviz.min.js';
+                    gvScript.onload = () => resolve();
+                    gvScript.onerror = () => reject(new Error('Failed to load d3-graphviz'));
+                    document.head.appendChild(gvScript);
+                };
+                d3Script.onerror = () => reject(new Error('Failed to load d3'));
+                document.head.appendChild(d3Script);
+            });
+
+            return _graphvizLoading;
+        }
+
+        // Very small heuristic to detect DOT-ish text
+        function isLikelyDOT(text) {
+            const t = text.trim();
+            // Strong indicators:
+            // - starts with 'digraph' or 'graph'
+            // - contains semicolons (common in DOT)
+            // - simple identifier -> identifier or identifier -- identifier patterns (no spaces/quotes inside identifiers)
+            if (/^(digraph|graph)\b/i.test(t)) return true;
+            if (/;/.test(t)) return true;
+            // match a simple identifier (alphanumeric/underscore) -> identifier (avoids quoted/ spaced labels common in Mermaid)
+            if (/(^|\s)[A-Za-z_][\w]*\s*->\s*[A-Za-z_][\w]*/m.test(text)) return true;
+            if (/(^|\s)[A-Za-z_][\w]*\s*--\s*[A-Za-z_][\w]*/m.test(text)) return true;
+            return false;
+        }
+
+        // Inject or replace rankdir in a DOT source string
+        function injectRankdir(dotSource, rankdir) {
+            try {
+                // If the DOT starts with digraph/graph { ... }
+                const m = dotSource.match(/^(\s*(digraph|graph)\s+[^\{]*\{)/i);
+                if (m) {
+                    const header = m[1];
+                    const rest = dotSource.slice(header.length);
+                    // Insert rankdir at top of body or replace existing rankdir
+                    if (/rankdir\s*=/.test(rest)) {
+                        return dotSource.replace(/rankdir\s*=\s*[A-Za-z]+/i, 'rankdir=' + rankdir);
+                    } else {
+                        return header + '\n  rankdir=' + rankdir + ';\n' + rest;
+                    }
+                }
+                // If no header match, just prepend
+                return 'digraph G {\n  rankdir=' + rankdir + ';\n' + dotSource + '\n}';
+            } catch (e) {
+                return dotSource;
+            }
+        }
+
+        // Load saved settings if present
+        (function loadSettings() {
+            try {
+                const raw = localStorage.getItem('mermaidExporter.settings');
+                if (!raw) return;
+                const settings = JSON.parse(raw);
+                if (settings.theme) document.getElementById('themeSelector').value = settings.theme;
+                if (settings.edgeStyle) document.getElementById('edgeStyleSelector').value = settings.edgeStyle;
+                if (settings.orientation) document.getElementById('orientationSelector').value = settings.orientation;
+                // Apply now
+                applySettings();
+            } catch (e) { /* ignore parse errors */ }
+        })();
         
-        // Copy to clipboard function
+        // Copy to clipboard function (text fallback + ClipboardItem when available)
         function copyToClipboard() {
             const display = document.getElementById('diagramDisplay');
             if (!display.querySelector('svg')) {
                 alert('Please render a diagram first!');
                 return;
             }
-            
-            // For SVG copy
+
             const svgElement = display.querySelector('svg');
             const svgString = new XMLSerializer().serializeToString(svgElement);
-            
-            navigator.clipboard.writeText(svgString).then(() => {
-                alert('SVG copied to clipboard!');
-            }).catch(err => {
-                console.error('Failed to copy: ', err);
-                alert('Failed to copy to clipboard');
-            });
+
+            // Prefer writing an image blob when supported
+            if (navigator.clipboard && window.ClipboardItem) {
+                const blob = new Blob([svgString], { type: 'image/svg+xml' });
+                const item = new ClipboardItem({ 'image/svg+xml': blob });
+                navigator.clipboard.write([item]).then(() => {
+                    alert('SVG image copied to clipboard!');
+                }).catch(err => {
+                    console.error('Clipboard image write failed', err);
+                    // Fallback to writing text
+                    navigator.clipboard.writeText(svgString).then(() => {
+                        alert('SVG source copied to clipboard as text');
+                    }).catch(e => {
+                        console.error('Clipboard text write failed', e);
+                        alert('Failed to copy to clipboard');
+                    });
+                });
+            } else {
+                navigator.clipboard.writeText(svgString).then(() => {
+                    alert('SVG source copied to clipboard as text');
+                }).catch(err => {
+                    console.error('Failed to copy: ', err);
+                    alert('Failed to copy to clipboard');
+                });
+            }
         }
         
         // Export to SVG function
@@ -263,15 +621,33 @@
             evt.currentTarget.className += " active";
         }
         
-        // Render diagram function
+        // Render diagram function (uses unique IDs to avoid collisions)
+        let _mermaidRenderCounter = 0;
         function renderDiagram() {
-            const code = document.getElementById('code').value;
+            clearError();
+            showStatus('Rendering diagram...', 'info', true);
+            let code = document.getElementById('code').value;
             const display = document.getElementById('diagramDisplay');
             const title = document.getElementById('diagramTitle').value;
-            
-            // Clear previous diagram
+
+            // Determine renderer and apply orientation token if Mermaid flowchart/graph
+            const renderer = document.getElementById('rendererSelector') ? document.getElementById('rendererSelector').value : 'mermaid';
+            if (renderer === 'mermaid') {
+                try {
+                    const orientation = document.getElementById('orientationSelector').value;
+                    const trimmed = code.trim();
+                    const firstLineMatch = trimmed.match(/^(flowchart|graph)(\s+[A-Za-z]{1,2})?/i);
+                    if (firstLineMatch) {
+                        code = code.replace(/^(flowchart|graph)(\s+[A-Za-z]{1,2})?/i, `$1 ${orientation}`);
+                    }
+                } catch (e) {
+                    // ignore if orientation control missing
+                }
+            }
+
+            // Clear previous diagram but keep title area reserved
             display.innerHTML = '';
-            
+
             // Add title if provided
             if (title) {
                 const titleElement = document.createElement('div');
@@ -279,43 +655,163 @@
                 titleElement.textContent = title;
                 display.appendChild(titleElement);
             }
-            
+
             // Create new diagram container
             const diagramContainer = document.createElement('div');
             diagramContainer.className = 'mermaid';
             diagramContainer.textContent = code;
             display.appendChild(diagramContainer);
-            
-            // Render the diagram
-            mermaid.render('mermaid-svg', code).then(result => {
-                // Replace just the diagram container, not the title
-                diagramContainer.outerHTML = result.svg;
-            }).catch(error => {
-                diagramContainer.outerHTML = '<p style="color: red;">Error rendering diagram: ' + error.message + '</p>';
-            });
+
+            // Generate a unique id for this render to avoid collisions
+            const id = 'mermaid-svg-' + (Date.now()) + '-' + (_mermaidRenderCounter++);
+
+            // Render the diagram using the selected renderer
+            if (renderer === 'graphviz') {
+                // Graphviz path: validate DOT-ish text and lazy-load graphviz libs
+                const warningEl = document.getElementById('rendererWarning');
+                if (!isLikelyDOT(code)) {
+                    // Show an inline warning with an action to switch to Mermaid
+                    if (warningEl) {
+                        warningEl.innerHTML = 'Content does not look like DOT. Graphviz may fail. <button id="switchToMermaidBtn" style="margin-left:8px;">Switch to Mermaid</button>';
+                        warningEl.style.display = 'inline-block';
+                        const btn = document.getElementById('switchToMermaidBtn');
+                        if (btn) btn.onclick = function() { document.getElementById('rendererSelector').value = 'mermaid'; applySettings(); };
+                    }
+
+                    // Show a clear message in the diagram area and stop — avoid trying to render Mermaid with Graphviz
+                    diagramContainer.outerHTML = '<div style="padding:12px;border:1px solid #f1c40f;background:#fff8e1;color:#333;border-radius:4px;"><strong>Renderer mismatch:</strong> Selected <em>Graphviz</em> but the code looks like Mermaid (ER/class/flow).<br>Please switch to <strong>Mermaid</strong> or provide valid DOT input. <button id="switchBtnInline" style="margin-top:8px;display:inline-block;">Switch to Mermaid</button></div>';
+                    // Wire inline button
+                    setTimeout(() => {
+                        const inline = document.getElementById('switchBtnInline');
+                        if (inline) inline.onclick = function() { document.getElementById('rendererSelector').value = 'mermaid'; applySettings(); };
+                    }, 0);
+
+                    updateExportButtonState(false);
+                    return;
+                } else {
+                    if (warningEl) { warningEl.style.display = 'none'; }
+                }
+
+                ensureGraphvizLoaded().then(() => {
+                    try {
+                        // Inject rankdir from orientation selector
+                        const orientation = document.getElementById('orientationSelector').value || 'TD';
+                        // Map mermaid orientation tokens to DOT rankdir values
+                        const rankdirMap = { 'TD': 'TB', 'LR': 'LR', 'RL': 'RL', 'BT': 'BT' };
+                        const rankdir = rankdirMap[orientation] || 'TB';
+                        const dotSource = injectRankdir(code, rankdir);
+
+                        const gvId = id + '-gv';
+                        diagramContainer.id = gvId;
+
+                        // Render with animation; on end enable export
+                        d3.select('#' + gvId).graphviz()
+                            .transition(function() { return d3.transition('main').duration(300); })
+                            .renderDot(dotSource)
+                            .on('end', function() { updateExportButtonState(true); showStatus('Rendered (Graphviz)', 'success', false); setTimeout(hideStatus, 2500); });
+                    } catch (e) {
+                        showError('Graphviz render error: ' + (e && e.message ? e.message : e));
+                        diagramContainer.outerHTML = '<p style="color: red;">Graphviz render error: ' + (e && e.message ? e.message : e) + '</p>';
+                        hideStatus();
+                    }
+                }).catch(err => {
+                    showError('Failed to load Graphviz renderer: ' + (err && err.message ? err.message : err));
+                    diagramContainer.outerHTML = '<p style="color: red;">Failed to load Graphviz renderer: ' + (err && err.message ? err.message : err) + '</p>';
+                    hideStatus();
+                });
+            } else {
+                // Default to Mermaid
+                if (document.getElementById('rendererWarning')) document.getElementById('rendererWarning').style.display = 'none';
+                try {
+                    mermaid.render(id, code).then(result => {
+                        // Replace just the diagram container (not the title)
+                        // result.svg is a full <svg ...>...</svg> string
+                        diagramContainer.outerHTML = result.svg;
+                        updateExportButtonState(true);
+                        showStatus('Rendered (Mermaid)', 'success', false);
+                        setTimeout(hideStatus, 2000);
+                    }).catch(error => {
+                        showError('Error rendering diagram: ' + (error && error.message ? error.message : error));
+                        diagramContainer.outerHTML = '<p style="color: red;">Error rendering diagram: ' + (error && error.message ? error.message : error) + '</p>';
+                        hideStatus();
+                    });
+                } catch (err) {
+                    showError('Error rendering diagram: ' + err.message);
+                    diagramContainer.outerHTML = '<p style="color: red;">Error rendering diagram: ' + err.message + '</p>';
+                    hideStatus();
+                }
+            }
         }
+
+        // Debounce utility for live preview
+        function debounce(fn, wait) {
+            let t = null;
+            return function(...args) {
+                clearTimeout(t);
+                t = setTimeout(() => fn.apply(this, args), wait);
+            };
+        }
+
+        // Wire live preview: 500ms debounce
+        (function wireLivePreview() {
+            const ta = document.getElementById('code');
+            const live = document.getElementById('liveToggle');
+            if (!ta || !live) return;
+            const debounced = debounce(() => {
+                if (live.checked) renderDiagram();
+            }, 500);
+            ta.addEventListener('input', debounced);
+
+            // Keyboard shortcut: Ctrl/Cmd+Enter to render immediately
+            ta.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    renderDiagram();
+                }
+            });
+        })();
         
-        // Export to PNG function
+        // Export to PNG by converting the SVG to an image (preserves vector rendering)
         function exportToPNG() {
             const display = document.getElementById('diagramDisplay');
-            if (!display.querySelector('svg')) {
+            const svgElement = display.querySelector('svg');
+            if (!svgElement) {
                 alert('Please render a diagram first!');
                 return;
             }
-            
-            // Set optional scale and background color
-            const scale = 2; // Higher quality export
-            html2canvas(display, {
-                backgroundColor: '#FFFFFF',
-                scale: scale
-            }).then(canvas => {
+
+            const svgString = new XMLSerializer().serializeToString(svgElement);
+
+            // Sanitize filename
+            const baseName = document.getElementById('diagramTitle').value ?
+                document.getElementById('diagramTitle').value.replace(/\s+/g, '_') : 'mermaid_diagram';
+            const fileName = baseName + '.png';
+
+            // Convert SVG string to an image then to canvas for PNG export
+            const img = new Image();
+            const svg64 = btoa(unescape(encodeURIComponent(svgString)));
+            img.src = 'data:image/svg+xml;base64,' + svg64;
+
+            img.onload = function() {
+                const scale = 2; // scale up for higher DPI
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width * scale || svgElement.getBBox().width * scale || 1000;
+                canvas.height = img.height * scale || svgElement.getBBox().height * scale || 600;
+                const ctx = canvas.getContext('2d');
+                // White background
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
                 canvas.toBlob(function(blob) {
-                    const fileName = document.getElementById('diagramTitle').value ? 
-                        document.getElementById('diagramTitle').value.replace(/\s+/g, '_') + '.png' : 
-                        'mermaid_diagram.png';
                     saveAs(blob, fileName);
-                });
-            });
+                }, 'image/png');
+            };
+
+            img.onerror = function(err) {
+                console.error('Failed to convert SVG to PNG', err);
+                alert('Failed to export PNG');
+            };
         }
         
         // Extract Mermaid diagrams from a markdown file
@@ -731,8 +1227,15 @@
             document.getElementById('Editor').style.display = 'block';
         }
         
-        // Initial render
-        renderDiagram();
+    // Initial render via applySettings to ensure UI prefs are applied
+    // Show initial ready state then apply settings and hide status if no render occurs
+    showStatus('Ready', 'info', false);
+    applySettings();
+    // Hide status after a short delay if no errors (keeps UI clean)
+    setTimeout(() => {
+        const err = document.getElementById('errorBox');
+        if (err && !err.textContent) hideStatus();
+    }, 1200);
     </script>
 </body>
 </html>
